@@ -12,5 +12,5 @@ call "%vs%\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 -no_logo >nul ||
 pushd "%build%" || exit /b 1
 fxc /nologo /O3 /T vs_5_0 /E Vertex /Fh Vertex.h /Vn g_Vertex "%src%weather.hlsl" || exit /b 1
 fxc /nologo /O3 /T ps_5_0 /E Pixel /Fh Pixel.h /Vn g_Pixel "%src%weather.hlsl" || exit /b 1
-cl /nologo /O2 /MT /EHsc /LD /I. "%src%Renderer.cpp" /link /OUT:WindowWeather.Gpu.dll user32.lib d3d11.lib dxgi.lib dcomp.lib || exit /b 1
+cl /nologo /O2 /MT /EHsc /LD /I. "%src%Renderer.cpp" "%src%DesktopIcons.cpp" /link /OUT:WindowWeather.Gpu.dll user32.lib d3d11.lib dxgi.lib dcomp.lib ole32.lib shell32.lib uuid.lib || exit /b 1
 popd

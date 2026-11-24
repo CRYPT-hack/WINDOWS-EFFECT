@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -10,6 +10,7 @@ namespace WindowWeather {
     internal sealed class Surface {
         public IntPtr Id;
         public Rect Box;
+        public bool Taskbar;
     }
 
     internal static class Desktop {
@@ -35,19 +36,22 @@ namespace WindowWeather {
             var name = new StringBuilder(256);
             EnumWindows(delegate(IntPtr h, IntPtr unused) {
                 if (!IsWindowVisible(h) || IsIconic(h)) return true;
+                GetClassName(h, name, name.Capacity);
+                string cls=name.ToString();
+                bool taskbar=cls=="Shell_TrayWnd" || cls=="Shell_SecondaryTrayWnd";
                 int ex = GetStyle(h, -20);
-                if ((ex & (0x80 | 0x20 | 0x08000000)) != 0) return true;
+                if (!taskbar && (ex & (0x80 | 0x20 | 0x08000000)) != 0) return true;
                 int cloaked;
                 if (DwmInt(h, 14, out cloaked, 4) == 0 && cloaked != 0) return true;
-                GetClassName(h, name, name.Capacity);
-                switch (name.ToString()) {
-                    case "Progman": case "WorkerW": case "Shell_TrayWnd": case "Shell_SecondaryTrayWnd":
+                switch (cls) {
+                    case "Progman": case "WorkerW":
                     case "Windows.UI.Core.CoreWindow": case "#32768": return true;
                 }
                 Box b;
                 if (DwmBounds(h, 9, out b, 16) != 0 && !GetWindowRect(h, out b)) return true;
-                if (b.Right-b.Left < 48 || b.Bottom-b.Top < 28) return true;
-                windows.Add(new Surface { Id=h, Box=new Rect(b.Left,b.Top,b.Right-b.Left,b.Bottom-b.Top) });
+                if (!taskbar && (b.Right-b.Left < 48 || b.Bottom-b.Top < 28)) return true;
+                if(b.Right<=b.Left || b.Bottom<=b.Top)return true;
+                windows.Add(new Surface { Id=h, Taskbar=taskbar, Box=new Rect(b.Left,b.Top,b.Right-b.Left,b.Bottom-b.Top) });
                 return true;
             }, IntPtr.Zero);
             return windows;
@@ -128,19 +132,39 @@ namespace WindowWeather {
             View.Advance(dt);
             if(gpu!=null && !gpu.Draw(View)) UseFallback();
         }
-        internal void Refresh(List<Surface> windows, IntPtr foreground) {
+        internal void Refresh(List<Surface> windows, IntPtr foreground, IconLedge[] icons=null) {
             var screen = Monitor.Bounds;
             var area = new Rect(screen.X,screen.Y,screen.Width,screen.Height);
             double scale=View.DisplayScale;
             var local = new List<Surface>();
+            var ledges=new List<Ledge>();
+            double width=area.Width/scale,height=area.Height/scale;
+            bool bottomBar=false;
             Fullscreen = false;
             foreach (var surface in windows) {
                 if (!area.IntersectsWith(surface.Box)) continue;
                 var b = surface.Box;
+                var bounds=new Rect((b.X-area.X)/scale,(b.Y-area.Y)/scale,b.Width/scale,b.Height/scale);
+                if(surface.Taskbar){
+                    var visible=Rect.Intersect(bounds,new Rect(0,0,width,height));
+                    if(!visible.IsEmpty && visible.Width>3 && visible.Height>3){
+                        ledges.Add(new Ledge(surface.Id.ToInt64(),visible.Left,visible.Right,visible.Top+1.5,local.Count,LedgeKind.Taskbar));
+                        bottomBar|=visible.Bottom>=height-1 && visible.Width>width*.85;
+                    }
+                    continue;
+                }
                 if (surface.Id == foreground && b.Contains(area)) Fullscreen = true;
-                local.Add(new Surface { Id=surface.Id, Box=new Rect((b.X-area.X)/scale,(b.Y-area.Y)/scale,b.Width/scale,b.Height/scale) });
+                local.Add(new Surface {Id=surface.Id, Box=bounds});
             }
-            View.SetWindows(local);
+            if(icons!=null)foreach(var icon in icons){
+                var b=icon.Box;
+                if(b.Right<=area.Left || b.Left>=area.Right || b.Top<area.Top || b.Top>=area.Bottom)continue;
+                double inset=(b.Right-b.Left)*.09;
+                ledges.Add(new Ledge(icon.Key|long.MinValue,Math.Max(0,(b.Left+inset-area.Left)/scale),
+                    Math.Min(width,(b.Right-inset-area.Left)/scale),(b.Top-area.Top)/scale+1,local.Count,LedgeKind.Icon));
+            }
+            if(!bottomBar)ledges.Add(new Ledge(long.MinValue,0,width,height-1,local.Count,LedgeKind.Ground));
+            View.SetWindows(local,ledges);
         }
     }
 }

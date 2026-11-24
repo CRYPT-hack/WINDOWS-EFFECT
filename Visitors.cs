@@ -22,28 +22,27 @@ namespace WindowWeather {
             return true;
         }
         internal void Step(Scene view,List<Surface> windows,List<Deposit> deposits,List<Particle> falling,Preferences prefs,double dt) {
-            bool brushSnow=prefs.Mode==Weather.Snow || prefs.Mode==Weather.Sleet;
-            if(!prefs.Visitors && !brushSnow) {previous.X=double.NaN;perch=IntPtr.Zero;return;}
+            bool brushSnow=Snowpack.Snowing(prefs.Mode);
+            bool leaves=prefs.Mode==Weather.Leaves;
+            if(!prefs.Visitors && !brushSnow && !leaves) {previous.X=double.NaN;perch=IntPtr.Zero;return;}
             Point cursor=new Point(double.NaN,double.NaN);
             if(view.Direct || PresentationSource.FromVisual(view)!=null) {
                 var screen=Forms.Cursor.Position;
                 cursor=new Point((screen.X-view.ScreenOrigin.X)/view.DisplayScale,(screen.Y-view.ScreenOrigin.Y)/view.DisplayScale);
             }
-            double motion=cursor.X-previous.X;
-            if(brushSnow && Math.Abs(motion)>.8 && Math.Abs(motion)<110) {
-                for(int i=deposits.Count-1;i>=0;i--) {
-                    var d=deposits[i];
-                    if(d.Kind!=Material.Flake) continue;
-                    int n;
-                    if(!view.TryGetSurface(d.Owner,out n)) continue;
-                    var b=windows[n].Box;
-                    var point=new Point(b.Left+d.X,b.Top-1);
-                    if(Math.Abs(cursor.X-point.X)>17 || Math.Abs(cursor.Y-point.Y)>14 || !Exposed(windows,n,point)) continue;
-                    d.X+=motion*.95;
-                    if(d.X<2 || d.X>b.Width-2) {
-                        if(falling.Count<650) falling.Add(new Particle {X=point.X+motion,Y=point.Y+4,Speed=53,Size=d.Size,Kind=Material.Flake});
-                        deposits.RemoveAt(i);
-                    }
+            if(brushSnow)view.Snow.Brush(previous,cursor,windows);
+            Vector sweep=cursor-previous;
+            if(leaves && sweep.Length>2 && sweep.Length<180){
+                foreach(var p in falling){
+                    if(p.Kind!=Material.Leaf)continue;
+                    var here=new Point(p.X,p.Y);
+                    double t=Math.Max(0,Math.Min(1,Vector.Multiply(here-previous,sweep)/sweep.LengthSquared));
+                    double distance=(here-(previous+t*sweep)).Length;
+                    if(distance>85 || !Exposed(windows,Math.Min(p.Layer,windows.Count),here))continue;
+                    double strength=1-distance/85;
+                    p.ImpulseX=Math.Max(-250,Math.Min(250,p.ImpulseX+sweep.X*3*strength));
+                    p.Lift=Math.Max(-140,p.Lift-sweep.Length*2*strength);
+                    p.Phase+=strength*.25;
                 }
             }
             previous=cursor;
@@ -72,7 +71,8 @@ namespace WindowWeather {
         internal void Draw(WeatherCanvas dc,Surface surface) {
             if(perch==IntPtr.Zero || surface.Id!=perch)return;
             double flight=departing ? age*65 : 0;
-            var m=Matrix.Identity;m.Translate(surface.Box.Left+offset+flight,surface.Box.Top-flight*.75);dc.PushTransform(m);
+            double hop=departing ? 0 : Math.Max(0,Math.Sin((age%4.8-1.2)*8))*(age%4.8>1.2 && age%4.8<1.6 ? 4 : 0);
+            var m=Matrix.Identity;m.Translate(surface.Box.Left+offset+flight,surface.Box.Top-flight*.75-hop);dc.PushTransform(m);
             dc.DrawPath(plumage[color],PathKind.Tail);
             dc.DrawEllipse(plumage[color],new Point(-1,-5.8),7,5.3);
             double bob=Math.Sin(age*3.1)*.65;

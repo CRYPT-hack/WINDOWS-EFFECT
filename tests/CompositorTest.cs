@@ -59,6 +59,15 @@ internal static class CompositorTest {
                 Marshal.ThrowExceptionForHR(WeatherWindows(state,new float[]{0,0,25,25},1));
                 PresentUntil(state,mark,center,0x0000ff);
                 Check(Pixel(center)==0x0000ff,"moving the foreground window exposes the particle");
+                var slope=new float[]{90,50,20,8,1,14,Bits(0xffffffff),Bits(5),0};
+                var lower=Point.Add(origin,new Size(105,52));
+                var upper=Point.Add(origin,new Size(75,46));
+                var timer=Stopwatch.StartNew();
+                do {
+                    Marshal.ThrowExceptionForHR(WeatherFrame(state,slope,1,180,100,1));
+                    Application.DoEvents();Thread.Sleep(20);
+                } while(Pixel(lower)==0xff0000 && timer.ElapsedMilliseconds<2500);
+                Check(Pixel(lower)!=0xff0000 && Pixel(upper)==0xff0000,"snow follows the simulated slope with a transparent crest");
             } finally {WeatherDestroy(state);}
         }
     }

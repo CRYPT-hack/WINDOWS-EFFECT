@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -18,6 +18,7 @@ namespace WindowWeather {
         [DllImport("user32")] internal static extern bool ShowWindow(IntPtr handle,int command);
         [DllImport("user32")] private static extern uint GetDpiForWindow(IntPtr window);
         private static IntPtr library;
+        internal static bool NativeLoaded {get{return library!=IntPtr.Zero;}}
         private IntPtr state;
         internal readonly IntPtr Handle;
         internal readonly double Scale;

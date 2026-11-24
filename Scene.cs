@@ -4,11 +4,12 @@ using System.Windows;
 using System.Windows.Media;
 
 namespace WindowWeather {
-    public enum Weather { Rain, Snow, Sleet, Leaves, Sunlight, Fog }
+    public enum Weather { Rain, Snow, Sleet, Leaves, Sunlight, Fog, Blizzard, Fireflies }
     internal enum Material { Drop, Flake, Leaf }
 
     internal sealed class Particle {
         internal double X,Y,Speed,Size,Phase,Drift;
+        internal double ImpulseX, Lift, Mass;
         internal int Layer, Tint;
         internal Material Kind;
     }
@@ -35,6 +36,16 @@ namespace WindowWeather {
         internal Point ScreenOrigin;
         internal double DisplayScale=1;
         internal bool TryGetSurface(IntPtr id,out int n){return index.TryGetValue(id,out n);}
+        private struct Puff {
+            internal Point Point;
+            internal double Age,Scale;
+            internal int Depth;
+        }
+        private readonly Puff[] puffs=new Puff[32];
+        private int nextPuff;
+        internal readonly Snowpack Snow;
+        private static readonly Brush insectGlow=Glow(Color.FromArgb(88,218,238,107));
+        private static readonly Brush insectCore=Ink(236,248,252,159);
         private Weather last;
         private double time, credit;
         private bool warm = true;
@@ -42,7 +53,6 @@ namespace WindowWeather {
         private static readonly Pen glint = Stroke(163,232,246,248,0.9);
         private static readonly Pen waterLine = Stroke(115,105,155,178,1.8);
         private static readonly Brush water = Ink(135,142,190,211);
-        private static readonly Brush frost = Ink(229,235,245,250);
         private static readonly Brush[] flakes = { Ink(147,215,228,237),Ink(199,226,239,245),Ink(231,245,251,253) };
         private static readonly Brush[] leaves = { Ink(224,189,110,43),Ink(224,185,75,43),Ink(225,212,153,48),Ink(221,142,108,48) };
         private static readonly Pen vein = Stroke(160,248,203,119,.65);
@@ -60,12 +70,25 @@ namespace WindowWeather {
         private static Brush Glow(Color c) {
             var brush = new RadialGradientBrush(c,Color.FromArgb(0,c.R,c.G,c.B)); brush.Freeze(); return brush;
         }
-        internal Scene(Preferences settings) { prefs=settings; ClipToBounds=true; IsHitTestVisible=false; }
-        internal void SetWindows(List<Surface> next) {
+        internal Scene(Preferences settings) { prefs=settings; Snow=new Snowpack(ShedSnow); ClipToBounds=true; IsHitTestVisible=false; }
+        private void ShedSnow(double x,double y,double mass,double push,int depth){
+            if(falling.Count>=700 || mass<.08)return;
+            falling.Add(new Particle {Kind=Material.Flake,X=x,Y=y,Mass=mass,Size=Math.Min(3,.75+Math.Sqrt(mass)*.47),
+                Layer=depth,Speed=62+Math.Min(80,mass*3),Lift=-56,ImpulseX=Math.Max(-150,Math.Min(150,push)),
+                Phase=random.NextDouble()*6.28,Tint=2});
+        }
+        internal void SetWindows(List<Surface> next,List<Ledge> shell=null) {
             var size = RenderSize;
             bool same = size == clipSize && next.Count == windows.Count;
             for (int i=0; same && i<next.Count; i++)
                 same = next[i].Id==windows[i].Id && next[i].Box==windows[i].Box;
+            var ledges=shell==null ? new List<Ledge>() : new List<Ledge>(shell);
+            for(int i=0;i<next.Count;i++){
+                var b=next[i].Box;
+                if(b.Top>=3 && b.Top<=size.Height && b.Right>1 && b.Left<size.Width-1)
+                    ledges.Add(new Ledge(next[i].Id.ToInt64(),Math.Max(0,b.Left+2),Math.Min(size.Width,b.Right-2),b.Top,i,LedgeKind.Window));
+            }
+            Snow.SetLedges(ledges,size.Width);
             if (same) return;
             windows=next; clipSize=size; index.Clear(); clips.Clear();
             Revision++;
@@ -86,24 +109,35 @@ namespace WindowWeather {
         private Particle Spawn(bool initial) {
             var p=new Particle();
             p.Layer=random.NextDouble()<prefs.Depth/100.0 ? random.Next(1,Math.Max(1,Math.Min(3,windows.Count))+1) : 0;
-            p.Kind = prefs.Mode==Weather.Snow || (prefs.Mode==Weather.Sleet && random.Next(2)==0) ? Material.Flake :
+            p.Kind = prefs.Mode==Weather.Snow || prefs.Mode==Weather.Blizzard || (prefs.Mode==Weather.Sleet && random.Next(2)==0) ? Material.Flake :
                      prefs.Mode==Weather.Leaves ? Material.Leaf : Material.Drop;
             p.X = random.NextDouble()*(ActualWidth+160)-80;
             p.Y = initial ? random.NextDouble()*ActualHeight : -15;
             p.Size = (.7+random.NextDouble()*.85)/(1+.13*p.Layer);
             p.Phase=random.NextDouble()*6.28; p.Tint=random.Next(leaves.Length);
-            double velocity=p.Kind==Material.Drop ? 520 : p.Kind==Material.Flake ? 37 : 60;
+            double velocity=p.Kind==Material.Drop ? 520 : p.Kind==Material.Flake ? (prefs.Mode==Weather.Blizzard ? 99 : 54) : 60;
             p.Speed=velocity*(.74+.48*random.NextDouble())*p.Size;
             return p;
         }
         internal void Advance(double dt) {
             if (ActualWidth<4 || ActualHeight<4) return;
-            if (prefs.Mode!=last) { falling.Clear(); settled.Clear(); credit=0; warm=true; last=prefs.Mode; }
+            if (prefs.Mode!=last) {
+                falling.RemoveAll(delegate(Particle p){return p.Mass<=0;});
+                settled.Clear(); credit=0; warm=true; last=prefs.Mode;
+            }
             time+=dt;
+            for(int i=0;i<puffs.Length;i++)if(puffs[i].Scale>0){
+                puffs[i].Age+=dt;
+                if(puffs[i].Age>=.38)puffs[i].Scale=0;
+            }
             Birds.Step(this,windows,settled,falling,prefs,dt);
-            if (prefs.Mode==Weather.Sunlight || prefs.Mode==Weather.Fog) { if(!Direct) InvalidateVisual(); return; }
+            double gust=prefs.Mode==Weather.Blizzard ? 67+55*Math.Sin(time*.84)+32*Math.Sin(time*1.89) : 0;
+            if(prefs.Wind<0)gust=-gust;
+            Snow.Step(dt,prefs.Mode,prefs.Wind+gust);
+            bool ambient=prefs.Mode==Weather.Sunlight || prefs.Mode==Weather.Fog || prefs.Mode==Weather.Fireflies;
             double density = (.16+prefs.Intensity/62.0)*Math.Min(4,ActualWidth*ActualHeight/1152000.0);
-            double rate = (prefs.Mode==Weather.Rain ? 95 : prefs.Mode==Weather.Sleet ? 32 : prefs.Mode==Weather.Snow ? 12 : 4.5)*density;
+            double rate = (prefs.Mode==Weather.Rain ? 95 : prefs.Mode==Weather.Sleet ? 32 : prefs.Mode==Weather.Snow ? 23 : prefs.Mode==Weather.Blizzard ? 54 : 4.5)*density;
+            if(ambient)rate=0;
             if (warm) {
                 int count=(int)Math.Min(290,rate*ActualHeight/(prefs.Mode==Weather.Rain ? 550 : prefs.Mode==Weather.Sleet ? 180 : 65));
                 for(int i=0;i<count;i++) falling.Add(Spawn(true));
@@ -116,7 +150,18 @@ namespace WindowWeather {
                 double oldY=p.Y, oldX=p.X;
                 p.Drift=prefs.Wind*(p.Kind==Material.Drop ? 1.6 : .9);
                 if(p.Kind!=Material.Drop) p.Drift+=Math.Sin(time*1.45+p.Phase)*(p.Kind==Material.Leaf ? 30 : 16);
-                p.X+=p.Drift*dt; p.Y+=p.Speed*dt;
+                if(p.Kind==Material.Flake)p.Drift+=gust+Math.Sin(time*.81+p.Y*.009+p.Phase)*11;
+                p.X+=(p.Drift+p.ImpulseX)*dt; p.Y+=(p.Speed+p.Lift)*dt;
+                p.ImpulseX*=Math.Max(0,1-dt*1.8);p.Lift*=Math.Max(0,1-dt*2.1);
+                if(p.Kind==Material.Flake){
+                    bool landed=Snow.Land(p,oldX,oldY,windows);
+                    if(landed && (p.Mass>2 || (p.Tint==0 && p.Size>1))){
+                        puffs[nextPuff]=new Puff {Point=Snow.LastImpact,Depth=Snow.ImpactDepth,Scale=p.Size};
+                        nextPuff=(nextPuff+1)%puffs.Length;
+                    }
+                    if(landed || p.Y>ActualHeight+24 || p.X < -100 || p.X>ActualWidth+100)falling.RemoveAt(i);
+                    continue;
+                }
                 Surface hit=null;
                 for(int j=Math.Min(p.Layer,windows.Count);j<windows.Count;j++) {
                     var b=windows[j].Box;
@@ -170,16 +215,18 @@ namespace WindowWeather {
             } else {
                 double r=1.8*p.Size;
                 dc.DrawEllipse(flakes[shade],point,r,r*.94);
-                if(p.Size>1.2) dc.DrawLine(glint,new Point(p.X-r*1.45,p.Y),new Point(p.X+r*1.45,p.Y));
+                if(p.Layer==0 && p.Size>1.12 && p.Tint==0 && p.Mass==0){
+                    double angle=time*.72+p.Phase;
+                    for(int i=0;i<3;i++){
+                        double dx=Math.Cos(angle)*r*1.75,dy=Math.Sin(angle)*r*1.75;
+                        dc.DrawLine(glint,new Point(p.X-dx,p.Y-dy),new Point(p.X+dx,p.Y+dy));angle+=Math.PI/3;
+                    }
+                }
             }
         }
         private void DrawDeposit(WeatherCanvas dc,Deposit d,Rect b) {
             double x=b.Left+d.X,y=b.Top-1,r=d.Size;
             if(d.Kind==Material.Leaf) { DrawLeaf(dc,x,y-1,r,69+d.Tint*15,d.Tint); return; }
-            if(d.Kind==Material.Flake) {
-                double fade=Math.Min(1,(d.Life-d.Age)/4);
-                dc.DrawEllipse(frost,new Point(x,y),4.7*r*fade,2.5*r*fade); return;
-            }
             if(d.Age<.26) {
                 double t=d.Age/.26, dx=(2+4*t)*r,dy=4*Math.Sin(t*Math.PI);
                 dc.DrawEllipse(water,new Point(x-dx,y-dy),.9,.85);
@@ -197,7 +244,18 @@ namespace WindowWeather {
         private void DrawAtmosphere(WeatherCanvas dc) {
             double w=ActualWidth,h=ActualHeight, k=.20+prefs.Intensity*.008;
             dc.PushOpacity(k);
-            if(prefs.Mode==Weather.Fog) {
+            if(prefs.Mode==Weather.Fireflies){
+                int count=10+prefs.Intensity/3;
+                for(int i=0;i<count;i++){
+                    double phase=i*2.39996;
+                    double x=w*((i*.6180339+.27)%1)+28*Math.Sin(time*.29+phase)+Math.Sin(time*.51+i)*10;
+                    double y=h*(.22+.74*((i*.4142135+.31)%1))+17*Math.Sin(time*.43+i);
+                    double pulse=Math.Pow(.5+.5*Math.Sin(time*(1.2+.13*(i%5))+phase),2);
+                    dc.PushOpacity(.08+.92*pulse);
+                    dc.DrawEllipse(insectGlow,new Point(x,y),4+6*pulse,4+6*pulse);
+                    dc.DrawEllipse(insectCore,new Point(x,y),1+pulse,.85+pulse*.6);dc.Pop();
+                }
+            } else if(prefs.Mode==Weather.Fog) {
                 for(int i=0;i<6;i++) {
                     double x=w*(.5+.64*Math.Sin(time*(.035+Math.Abs(prefs.Wind)*.0005)+i*1.62));
                     double y=h*(.20+.13*i+.08*Math.Cos(time*.057+i));
@@ -218,10 +276,16 @@ namespace WindowWeather {
             if(!Direct) Draw(new WpfCanvas(dc,this));
         }
         internal void Draw(WeatherCanvas dc) {
-            if(prefs.Mode==Weather.Sunlight || prefs.Mode==Weather.Fog) DrawAtmosphere(dc);
-            for(int z=Math.Min(3,windows.Count);z>=0;z--) {
+            if(prefs.Mode==Weather.Sunlight || prefs.Mode==Weather.Fog || prefs.Mode==Weather.Fireflies) DrawAtmosphere(dc);
+            int nearLayers=Math.Min(3,windows.Count);
+            foreach(var p in falling){
+                int depth=Math.Min(p.Layer,windows.Count);
+                if(depth<=nearLayers)continue;
+                dc.PushLayer(depth);DrawParticle(dc,p);dc.Pop();
+            }
+            for(int z=nearLayers;z>=0;z--) {
                 if(z>0) dc.PushLayer(z);
-                foreach(var p in falling) if(Math.Min(p.Layer,Math.Min(3,windows.Count))==z) DrawParticle(dc,p);
+                foreach(var p in falling) if(Math.Min(p.Layer,windows.Count)==z) DrawParticle(dc,p);
                 if(z>0) dc.Pop();
             }
             foreach(var d in settled) {
@@ -231,7 +295,20 @@ namespace WindowWeather {
                 DrawDeposit(dc,d,windows[owner].Box);
                 if(owner>0) dc.Pop();
             }
-            if(!prefs.Grass && !prefs.Visitors)return;
+            if(prefs.Grass || prefs.Visitors)DrawWindowDetails(dc);
+            Snow.Draw(dc);
+            foreach(var puff in puffs){
+                if(puff.Scale<=0)continue;
+                double t=puff.Age/.38,radius=(1-t)*puff.Scale;
+                double spread=(1+6*t)*puff.Scale,rise=(4*t*(1-t))*3*puff.Scale;
+                int depth=Math.Min(puff.Depth,windows.Count);
+                if(depth>0)dc.PushLayer(depth);
+                dc.DrawEllipse(flakes[0],new Point(puff.Point.X-spread,puff.Point.Y-rise),radius,radius*.8);
+                dc.DrawEllipse(flakes[1],new Point(puff.Point.X+spread*.8,puff.Point.Y-rise*1.3),radius*.85,radius*.7);
+                if(depth>0)dc.Pop();
+            }
+        }
+        private void DrawWindowDetails(WeatherCanvas dc){
             for(int n=windows.Count-1;n>=0;n--) {
                 var s=windows[n];
                 if(n>0) dc.PushLayer(n);

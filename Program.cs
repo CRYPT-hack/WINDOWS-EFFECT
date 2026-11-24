@@ -13,10 +13,11 @@ using Microsoft.Win32;
 using Forms = System.Windows.Forms;
 
 [assembly:System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8")]
+[assembly:System.Runtime.CompilerServices.InternalsVisibleTo("WindowWeather.SnowTests")]
 [assembly:AssemblyTitle("Window Weather")]
 [assembly:AssemblyDescription("Ambient weather for the Windows desktop")]
 [assembly:AssemblyProduct("Window Weather")]
-[assembly:AssemblyVersion("1.1.0.0")]
+[assembly:AssemblyVersion("1.2.0.0")]
 
 namespace WindowWeather {
     internal static class Program {
@@ -44,6 +45,8 @@ namespace WindowWeather {
         private readonly Dispatcher ui=Dispatcher.CurrentDispatcher;
         private readonly FrameClock frame;
         private readonly WindowChanges changes;
+        private readonly DesktopIcons icons=new DesktopIcons();
+        private bool showingWeather;
         private int refreshRate=60;
         private bool onBattery;
         private double lastScan;
@@ -159,7 +162,7 @@ namespace WindowWeather {
             IntPtr foreground=Desktop.GetForegroundWindow();
             bool running=false, fallback=false;
             foreach(var o in overlays) {
-                if(windows!=null && !Prefs.Disabled.Contains(o.Monitor.DeviceName)) o.Refresh(windows,foreground);
+                if(windows!=null && !Prefs.Disabled.Contains(o.Monitor.DeviceName)) o.Refresh(windows,foreground,icons.Items);
                 bool sleep=idle || Prefs.Disabled.Contains(o.Monitor.DeviceName) || (!Prefs.OverFullscreen && o.Fullscreen);
                 if(sleep!=o.Sleeping) {
                     o.Sleeping=sleep;
@@ -167,6 +170,7 @@ namespace WindowWeather {
                 }
                 if(!sleep){running=true;fallback|=!o.Accelerated;}
             }
+            showingWeather=running;
             audio.Set(running && Prefs.Sound && (Prefs.Mode==Weather.Rain || Prefs.Mode==Weather.Sleet));
             int cap=Prefs.Saver ? 24 : (onBattery || fallback ? 30 : 60);
             // An integer display-refresh divisor prevents uneven cadence, e.g. 48 fps at 144 Hz.
@@ -176,6 +180,7 @@ namespace WindowWeather {
         private void Tick() {
             double now=clock.Elapsed.TotalSeconds;
             double dt=Math.Min(.09,Math.Max(0,now-lastFrame)); lastFrame=now;
+            if(icons.Update(now,showingWeather && Snowpack.Snowing(Prefs.Mode)))changes.Dirty=true;
             if(now>=nextScan || (changes.Dirty && now-lastScan>=.014)) {
                 changes.Dirty=false; Scan(); lastScan=now;nextScan=now+2;
             }
@@ -184,7 +189,7 @@ namespace WindowWeather {
         }
         internal void Quit() { Quitting=true; Application.Current.Shutdown(); }
         public void Dispose() {
-            Quitting=true; frame.Dispose(); changes.Dispose(); save.Stop(); Flush();
+            Quitting=true; frame.Dispose(); changes.Dispose(); icons.Dispose(); save.Stop(); Flush();
             SystemEvents.DisplaySettingsChanged-=OnDisplays; SystemEvents.SessionSwitch-=OnSession; SystemEvents.PowerModeChanged-=OnPower;
             showWait.Unregister(null); showEvent.Dispose(); Desktop.UnregisterHotKey(messages.Handle,1); messages.Dispose();
             audio.Dispose(); tray.Visible=false; tray.Dispose(); menu.Dispose(); cloud.Dispose();

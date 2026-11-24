@@ -30,7 +30,7 @@ namespace WindowWeather {
             Window.Closing+=delegate(object sender,System.ComponentModel.CancelEventArgs e) {
                 if(!app.Quitting) { e.Cancel=true; Window.Hide(); }
             };
-            var glyphs=new string[]{"☂","❄","☔","❧","☀","≋"};
+            var glyphs=new string[]{"☂","❄","☔","❧","☀","≋","❅","✧"};
             foreach(Weather item in Enum.GetValues(typeof(Weather))) {
                 Weather scene=item;
                 var label=new TextBlock {Text=glyphs[(int)item]+"  "+item,FontSize=14,TextAlignment=TextAlignment.Center};

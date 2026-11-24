@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Media;
@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 namespace WindowWeather {
     internal enum PathKind { Leaf, Tail, Beak }
     internal abstract class WeatherCanvas {
+        internal abstract void DrawSnow(double x1,double x2,double y,double h1,double h2);
         internal abstract void DrawLine(Pen pen,Point a,Point b);
         internal abstract void DrawEllipse(Brush color,Point center,double rx,double ry);
         internal abstract void DrawPath(Brush color,PathKind kind);
@@ -22,6 +23,18 @@ namespace WindowWeather {
             Geometry.Parse("M -4,-7 L -14,-13 L -10,-4 L -4,-3 Z"),Geometry.Parse("M 7,-11 L 12,-9 L 7,-8 Z")};
         static WpfCanvas(){foreach(var path in paths) path.Freeze();}
         internal WpfCanvas(DrawingContext context,Scene view){dc=context;scene=view;}
+        private static readonly Brush snowFill=new LinearGradientBrush(Colors.White,Color.FromRgb(174,200,216),90);
+        internal override void DrawSnow(double x1,double x2,double y,double h1,double h2){
+            var shape=new StreamGeometry();
+            using(var g=shape.Open()){
+                g.BeginFigure(new Point(x1,y),true,true);
+                g.LineTo(new Point(x1,y-h1),true,false);
+                double middle=(x1+x2)*.5;
+                g.BezierTo(new Point(middle,y-h1),new Point(middle,y-h2),new Point(x2,y-h2),true,false);
+                g.LineTo(new Point(x2,y),true,false);
+            }
+            shape.Freeze();dc.DrawGeometry(snowFill,null,shape);
+        }
         internal override void DrawLine(Pen p,Point a,Point b){dc.DrawLine(p,a,b);}
         internal override void DrawEllipse(Brush b,Point p,double rx,double ry){dc.DrawEllipse(b,null,p,rx,ry);}
         internal override void DrawPath(Brush b,PathKind k){dc.DrawGeometry(b,null,paths[(int)k]);}
@@ -65,6 +78,10 @@ namespace WindowWeather {
             if(Count==Marks.Length) Array.Resize(ref Marks,Marks.Length*2);
             Marks[Count++]=new Mark {X=(float)center.X,Y=(float)center.Y,Rx=(float)rx,Ry=(float)ry,
                 AxisX=(float)ax,AxisY=(float)ay,Color=ColorOf(color),Shape=shape,Depth=(uint)state.Depth};
+        }
+        internal override void DrawSnow(double x1,double x2,double y,double h1,double h2){
+            double half=(Math.Max(h1,h2)+1)*.5;
+            Add(new Point((x1+x2)*.5,y-half),(x2-x1)*.5,half,h1,h2,Brushes.White,5);
         }
         internal override void DrawLine(Pen pen,Point a,Point b) {
             a=state.Transform.Transform(a);b=state.Transform.Transform(b);
