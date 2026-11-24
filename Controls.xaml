@@ -1,0 +1,73 @@
+﻿<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="Window Weather" Width="458" Height="605" MinWidth="370" MinHeight="360" WindowStartupLocation="CenterScreen"
+ FontFamily="Segoe UI" FontSize="14" Foreground="#203836" Background="#F5F6F1" UseLayoutRounding="True">
+ <Window.Resources>
+  <Style TargetType="Button">
+   <Setter Property="Foreground" Value="#233C38"/><Setter Property="Background" Value="#E4EBE5"/>
+   <Setter Property="Padding" Value="13,7"/><Setter Property="Cursor" Value="Hand"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+    <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="7" Padding="{TemplateBinding Padding}" BorderBrush="#B8CAC0" BorderThickness="1">
+     <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+    <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="BorderBrush" Value="#386D62"/></Trigger>
+     <Trigger Property="IsPressed" Value="True"><Setter TargetName="bd" Property="Opacity" Value=".74"/></Trigger>
+     <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="bd" Property="BorderBrush" Value="#215D51"/></Trigger>
+    </ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style TargetType="CheckBox"><Setter Property="Margin" Value="0,5"/><Setter Property="Foreground" Value="#233C38"/></Style>
+  <Style x:Key="Heading" TargetType="TextBlock"><Setter Property="FontSize" Value="17"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Margin" Value="0,2,0,8"/></Style>
+  <Style x:Key="Value" TargetType="TextBlock"><Setter Property="Foreground" Value="#41675E"/><Setter Property="HorizontalAlignment" Value="Right"/></Style>
+ </Window.Resources>
+ <DockPanel>
+  <Border DockPanel.Dock="Top" Padding="21,15,21,16" Background="#1B3734">
+   <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <StackPanel><TextBlock Text="Window Weather" Foreground="#FAFAED" FontFamily="Georgia" FontSize="28"/>
+     <TextBlock x:Name="Status" Foreground="#BFD7CA" Margin="1,4,0,0" FontSize="12"/></StackPanel>
+    <Button x:Name="Pause" Grid.Column="1" VerticalAlignment="Center" MinWidth="76" Background="#DDEADB"/>
+   </Grid>
+  </Border>
+  <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="#D5DDD4" Padding="18,10">
+   <DockPanel><Button x:Name="Exit" DockPanel.Dock="Right" Content="Quit" Padding="13,4"/>
+    <TextBlock x:Name="Hint" Foreground="#51685F" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
+   </DockPanel>
+  </Border>
+  <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="19,12,19,3">
+   <Button x:Name="ShowScene" Content="Scene" Margin="0,0,6,0"/><Button x:Name="ShowOptions" Content="Preferences"/>
+  </StackPanel>
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="20,9,20,16">
+   <Grid>
+    <StackPanel x:Name="ScenePage">
+     <TextBlock Text="Weather" Style="{StaticResource Heading}"/>
+     <UniformGrid x:Name="Choices" Columns="3" Rows="2" Margin="-3,0,-3,13"/>
+     <Grid><TextBlock Text="Intensity"/><TextBlock x:Name="LevelValue" Style="{StaticResource Value}"/></Grid>
+     <Slider x:Name="Level" Minimum="1" Maximum="100" Margin="0,4,0,12"/>
+     <Grid><TextBlock Text="Wind"/><TextBlock x:Name="WindValue" Style="{StaticResource Value}"/></Grid>
+     <Slider x:Name="Breeze" Minimum="-100" Maximum="100" Margin="0,4,0,12"/>
+     <Grid><TextBlock Text="Weather behind windows"/><TextBlock x:Name="DepthValue" Style="{StaticResource Value}"/></Grid>
+     <Slider x:Name="Distance" Minimum="0" Maximum="100" Margin="0,4,0,8"/>
+     <CheckBox x:Name="Grass" Content="Grow grass on window edges"/><CheckBox x:Name="Sound" Content="Play rain sounds during rain or sleet"/>
+    </StackPanel>
+    <StackPanel x:Name="OptionsPage" Visibility="Collapsed">
+     <TextBlock Text="Desktop" Style="{StaticResource Heading}"/>
+     <CheckBox x:Name="Fullscreen" Content="Show weather over full-screen apps"/>
+     <CheckBox x:Name="Saver" Content="Use a lower animation frame rate"/>
+     <TextBlock Text="Displays" Style="{StaticResource Heading}" Margin="0,14,0,4"/>
+     <StackPanel x:Name="Displays"/>
+     <TextBlock Text="Window birds" Style="{StaticResource Heading}" Margin="0,14,0,4"/>
+     <CheckBox x:Name="Birds" Content="Let birds perch on window edges"/>
+     <TextBlock x:Name="BirdCount" FontSize="12" Foreground="#51685F" TextWrapping="Wrap"/>
+     <TextBlock Text="Saved scenes" Style="{StaticResource Heading}" Margin="0,14,0,4"/>
+     <DockPanel><Button x:Name="LoadScene" Content="Load" DockPanel.Dock="Right" Margin="6,0,0,0"/>
+      <Button x:Name="SaveScene" Content="Save" DockPanel.Dock="Right" Margin="6,0,0,0"/>
+      <ComboBox x:Name="SceneName" IsEditable="True" ToolTip="Enter a scene name or select an existing scene" VerticalContentAlignment="Center"/></DockPanel>
+     <TextBlock x:Name="SceneNotice" Text="Type a name to save your current settings." FontSize="12" Foreground="#51685F" Margin="0,4,0,0" TextWrapping="Wrap"/>
+     <TextBlock Text="Local weather" Style="{StaticResource Heading}" Margin="0,14,0,4"/>
+     <TextBlock Text="Choose a city to match the scene to its current weather. Updates every 30 minutes via Open-Meteo." TextWrapping="Wrap" FontSize="12" Foreground="#51685F" Margin="0,0,0,7"/>
+     <DockPanel><Button x:Name="Sync" Content="Sync city" DockPanel.Dock="Right" Margin="6,0,0,0"/>
+      <TextBox x:Name="City" Padding="7,5" VerticalContentAlignment="Center" ToolTip="City name or postal code"/></DockPanel>
+     <TextBlock x:Name="Report" TextWrapping="Wrap" FontSize="12" Foreground="#41675E" Margin="0,6"/>
+     <Button x:Name="Manual" Content="Use manual weather" HorizontalAlignment="Left"/>
+    </StackPanel>
+   </Grid>
+  </ScrollViewer>
+ </DockPanel>
+</Window>
