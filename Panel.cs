@@ -40,6 +40,8 @@ namespace WindowWeather {
                 Get<System.Windows.Controls.Primitives.UniformGrid>("Choices").Children.Add(button);
                 choices[item]=button;
             }
+            Check("LockIn",delegate(bool b){app.Prefs.LockIn=b;});
+            Slider("Glow",delegate(int n){app.Prefs.GlowBrightness=n;});
             Slider("Level",delegate(int n){app.Manual();app.Prefs.Intensity=n;});
             Slider("Breeze",delegate(int n){app.Manual();app.Prefs.Wind=n;});
             Slider("Distance",delegate(int n){app.Prefs.Depth=n;});
@@ -56,7 +58,7 @@ namespace WindowWeather {
             Get<Button>("LoadScene").Click+=delegate {
                 SavedScene scene;
                 if(!app.Prefs.Scenes.TryGetValue(names.Text.Trim(),out scene)){Get<TextBlock>("SceneNotice").Text="Select a saved scene first.";return;}
-                app.Manual(); scene.Apply(app.Prefs); app.Changed(); Page(false);
+                app.Manual(); app.Prefs.LockIn=false; scene.Apply(app.Prefs); app.Changed(); Page(false);
             };
             Check("Grass",delegate(bool b){app.Prefs.Grass=b;});
             Check("Sound",delegate(bool b){app.Prefs.Sound=b;});
@@ -78,11 +80,18 @@ namespace WindowWeather {
             Style(Get<Button>("ShowScene"),!options); Style(Get<Button>("ShowOptions"),options);
         }
         private void Slider(string name,Action<int> change) {
-            var s=Get<Slider>(name); System.Windows.Automation.AutomationProperties.SetName(s,name=="Distance" ? "Weather behind windows" : name=="Breeze" ? "Wind" : "Intensity");
+            var s=Get<Slider>(name); System.Windows.Automation.AutomationProperties.SetName(s,name=="Glow" ? "Glow brightness" : name=="Distance" ? "Weather behind windows" : name=="Breeze" ? "Wind" : "Intensity");
             s.ValueChanged+=delegate {if(!updating) { change((int)Math.Round(s.Value)); app.Changed(); }};
         }
         private void Check(string name,Action<bool> change) {
-            var c=Get<CheckBox>(name); c.Click+=delegate {change(c.IsChecked==true); app.Changed();};
+            var c=Get<CheckBox>(name);
+            RoutedEventHandler changed=delegate {
+                if(updating)return;
+                change(c.IsChecked==true);
+                app.Changed();
+            };
+            c.Checked+=changed;
+            c.Unchecked+=changed;
         }
         internal void DisplayList() {
             var list=Get<StackPanel>("Displays"); list.Children.Clear();
@@ -102,7 +111,13 @@ namespace WindowWeather {
                 var p=app.Prefs;
                 foreach(var pair in choices) Style(pair.Value,pair.Key==p.Mode);
                 Get<Button>("Pause").Content=p.Paused ? "Resume" : "Pause";
-                Get<TextBlock>("Status").Text=(p.Paused ? "Paused" : "Weather on")+"   ·   "+p.Mode+(p.Sync ? "   ·   "+p.Place : "");
+                Get<TextBlock>("Status").Text=p.LockIn ? (p.Paused ? "Lock In   ·   Paused" : "Lock In   ·   Top-edge glow")
+                    : (p.Paused ? "Paused" : "Weather on")+"   ·   "+p.Mode+(p.Sync ? "   ·   "+p.Place : "");
+                Get<CheckBox>("LockIn").IsChecked=p.LockIn;
+                Get<StackPanel>("LampControls").Visibility=p.LockIn ? Visibility.Visible : Visibility.Collapsed;
+                Get<StackPanel>("WeatherControls").Visibility=p.LockIn ? Visibility.Collapsed : Visibility.Visible;
+                Get<Slider>("Glow").Value=p.GlowBrightness;
+                Get<TextBlock>("GlowValue").Text=p.GlowBrightness+"%";
                 Get<TextBlock>("Hint").Text=app.Hotkey ? "Ctrl + Alt + W   ·   Pause or resume" : "Right-click the tray cloud for controls";
                 Get<Slider>("Level").Value=p.Intensity; Get<TextBlock>("LevelValue").Text=p.Intensity+"%";
                 Get<Slider>("Breeze").Value=p.Wind; Get<TextBlock>("WindValue").Text=p.Wind==0 ? "Still" : (p.Wind<0 ? "← " : "→ ")+Math.Abs(p.Wind)+"%";

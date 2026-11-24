@@ -98,13 +98,15 @@ namespace WindowWeather {
         internal bool Sleeping,Fullscreen;
         private GpuOverlay gpu;
         private FallbackWindow fallback;
+        private readonly Preferences prefs;
+        private int presentedGlow=-1;
         internal double ActualWidth {get{return View.ActualWidth;}}
         internal double ActualHeight {get{return View.ActualHeight;}}
         internal bool IsVisible {get{return !Sleeping;}}
         internal bool Accelerated {get{return gpu!=null;}}
         internal IntPtr Handle {get{return gpu==null ? fallback.Handle : gpu.Handle;}}
         internal Overlay(Forms.Screen screen,Preferences prefs) {
-            Monitor=screen;View=new Scene(prefs);
+            this.prefs=prefs;Monitor=screen;View=new Scene(prefs);
             var r=screen.Bounds;
             View.ScreenOrigin=new Point(r.X,r.Y);
             gpu=GpuOverlay.TryCreate(r);
@@ -125,16 +127,28 @@ namespace WindowWeather {
             if(gpu==null) fallback.Place();
             else {var r=Monitor.Bounds;Desktop.SetWindowPos(Handle,new IntPtr(-1),r.X,r.Y,r.Width,r.Height,0x0010);}
         }
-        internal void Show(){Sleeping=false;if(gpu==null)fallback.Show();else GpuOverlay.ShowWindow(Handle,4);}
+        internal void Show(){presentedGlow=-1;Sleeping=false;if(gpu==null)fallback.Show();else GpuOverlay.ShowWindow(Handle,4);}
         internal void Hide(){Sleeping=true;if(gpu==null)fallback.Hide();else GpuOverlay.ShowWindow(Handle,0);}
         internal void Close(){if(gpu!=null)gpu.Dispose();else fallback.Close();}
         internal void Advance(double dt){
-            View.Advance(dt);
-            if(gpu!=null && !gpu.Draw(View)) UseFallback();
+            int glow=prefs.LockIn ? prefs.GlowBrightness : -1;
+            if(glow>=0 && glow==presentedGlow)return;
+            if(glow<0)View.Advance(dt);
+            else if(gpu==null)View.InvalidateVisual();
+            if(gpu!=null){
+                int result=gpu.Present(View);
+                if(result<0)UseFallback();
+                else if(result!=0){presentedGlow=-1;return;} // The compositor was busy. Retry next tick.
+            }
+            presentedGlow=glow;
         }
         internal void Refresh(List<Surface> windows, IntPtr foreground, IconLedge[] icons=null) {
             var screen = Monitor.Bounds;
             var area = new Rect(screen.X,screen.Y,screen.Width,screen.Height);
+            if(prefs.LockIn){
+                Fullscreen=windows.Exists(delegate(Surface s){return !s.Taskbar && s.Id==foreground && s.Box.Contains(area);});
+                return;
+            }
             double scale=View.DisplayScale;
             var local = new List<Surface>();
             var ledges=new List<Ledge>();

@@ -9,6 +9,7 @@ This is an independent Windows implementation inspired by Matt Senter’s [Weath
 Run **Window Weather.exe** on Windows 10 or 11 with .NET Framework 4.8 or later. The first launch starts the last saved scene. Open it again to bring up the controls.
 
 - Left-click the green cloud in the notification area to open controls. Windows may put the cloud under the hidden-icons arrow.
+- Turn on **Lock In** from the Scene panel or tray menu for a steady red glow along the top edge of each enabled display. **Glow brightness** adjusts its strength. Weather animation and rain audio pause during Lock In. Turn it off to return to your scene. The toggle and brightness are saved between launches.
 - Right-click the cloud for a scene, pause, or quit. **Ctrl + Alt + W** pauses or resumes weather when the shortcut is available.
 - Closing the controls leaves the weather running. **Quit** shuts down the app.
 - Choose Rain, Snow, Sleet, Leaves, Sunlight, Fog, Blizzard, or Fireflies. Adjust intensity, wind, and the proportion of particles that fall behind windows. Grass and synthesized rain audio are optional.

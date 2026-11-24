@@ -17,7 +17,7 @@ using Forms = System.Windows.Forms;
 [assembly:AssemblyTitle("Window Weather")]
 [assembly:AssemblyDescription("Ambient weather for the Windows desktop")]
 [assembly:AssemblyProduct("Window Weather")]
-[assembly:AssemblyVersion("1.2.0.0")]
+[assembly:AssemblyVersion("1.3.0.0")]
 
 namespace WindowWeather {
     internal static class Program {
@@ -59,7 +59,7 @@ namespace WindowWeather {
         private readonly Forms.NotifyIcon tray;
         private readonly Icon cloud;
         private readonly Forms.ContextMenuStrip menu=new Forms.ContextMenuStrip();
-        private readonly Forms.ToolStripMenuItem pauseItem;
+        private readonly Forms.ToolStripMenuItem pauseItem, lockInItem;
         private readonly List<Forms.ToolStripMenuItem> modes=new List<Forms.ToolStripMenuItem>();
         private Panel panel;
         private double lastFrame, nextScan;
@@ -78,10 +78,11 @@ namespace WindowWeather {
             tray=new Forms.NotifyIcon {Icon=cloud,Text="Window Weather",ContextMenuStrip=menu};
             menu.Items.Add("Open Window Weather",null,delegate { Open(); });
             pauseItem=(Forms.ToolStripMenuItem)menu.Items.Add("Pause",null,delegate { Toggle(); });
+            lockInItem=(Forms.ToolStripMenuItem)menu.Items.Add("Lock In",null,delegate {Prefs.LockIn=!Prefs.LockIn;Changed();});
             var scenes=new Forms.ToolStripMenuItem("Weather");
             foreach(Weather w in Enum.GetValues(typeof(Weather))) {
                 Weather chosen=w;
-                modes.Add((Forms.ToolStripMenuItem)scenes.DropDownItems.Add(w.ToString(),null,delegate { Manual(); Prefs.Mode=chosen; Changed(); }));
+                modes.Add((Forms.ToolStripMenuItem)scenes.DropDownItems.Add(w.ToString(),null,delegate { Manual(); Prefs.LockIn=false; Prefs.Mode=chosen; Changed(); }));
             }
             menu.Items.Add(scenes); menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add("Quit",null,delegate { Quit(); });
@@ -128,9 +129,11 @@ namespace WindowWeather {
             RefreshControls(); save.Stop(); save.Start(); Scan();
         }
         private void RefreshControls() {
-            tray.Text="Window Weather · "+(Prefs.Paused ? "Paused" : Prefs.Mode.ToString());
+            string effect=Prefs.LockIn ? "Lock In" : Prefs.Mode.ToString();
+            tray.Text="Window Weather · "+(Prefs.Paused ? "Paused" : effect);
+            lockInItem.Checked=Prefs.LockIn;
             pauseItem.Text=Prefs.Paused ? "Resume weather" : "Pause weather";
-            for(int i=0;i<modes.Count;i++) modes[i].Checked=i==(int)Prefs.Mode;
+            for(int i=0;i<modes.Count;i++) modes[i].Checked=!Prefs.LockIn && i==(int)Prefs.Mode;
             if(panel!=null) panel.Refresh();
         }
         internal void Toggle() { Prefs.Paused=!Prefs.Paused; Changed(); }
@@ -158,7 +161,7 @@ namespace WindowWeather {
         private void Scan() {
             bool idle=Prefs.Paused || locked || suspended;
             bool enabled=overlays.Exists(delegate(Overlay o){return !Prefs.Disabled.Contains(o.Monitor.DeviceName);});
-            var windows=idle || !enabled ? null : Desktop.ReadWindows();
+            var windows=idle || !enabled || (Prefs.LockIn && Prefs.OverFullscreen) ? null : Desktop.ReadWindows();
             IntPtr foreground=Desktop.GetForegroundWindow();
             bool running=false, fallback=false;
             foreach(var o in overlays) {
@@ -168,14 +171,17 @@ namespace WindowWeather {
                     o.Sleeping=sleep;
                     if(sleep) o.Hide(); else {o.Show();o.Place();}
                 }
-                if(!sleep){running=true;fallback|=!o.Accelerated;}
+                if(!sleep){
+                    running=true;fallback|=!o.Accelerated;
+                    if(Prefs.LockIn)o.Advance(0);
+                }
             }
-            showingWeather=running;
-            audio.Set(running && Prefs.Sound && (Prefs.Mode==Weather.Rain || Prefs.Mode==Weather.Sleet));
+            showingWeather=running && !Prefs.LockIn;
+            audio.Set(showingWeather && Prefs.Sound && (Prefs.Mode==Weather.Rain || Prefs.Mode==Weather.Sleet));
             int cap=Prefs.Saver ? 24 : (onBattery || fallback ? 30 : 60);
             // An integer display-refresh divisor prevents uneven cadence, e.g. 48 fps at 144 Hz.
             double fps=refreshRate/Math.Ceiling((double)refreshRate/cap);
-            frame.SetPeriod(running ? 1/fps : .25);
+            frame.SetPeriod(showingWeather ? 1/fps : .25);
         }
         private void Tick() {
             double now=clock.Elapsed.TotalSeconds;

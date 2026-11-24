@@ -66,7 +66,7 @@ namespace WindowWeather {
             if(ctx!=IntPtr.Zero)WeatherDestroy(ctx);
             return null;
         }
-        internal bool Draw(Scene view) {
+        internal int Present(Scene view) {
             if(view.Revision!=uploadedRevision) {
                 List<Surface> windows=view.Surfaces;
                 if(bounds.Length<windows.Count*4)Array.Resize(ref bounds,windows.Count*4);
@@ -75,11 +75,12 @@ namespace WindowWeather {
                     bounds[at]=(float)b.Left;bounds[at+1]=(float)b.Top;
                     bounds[at+2]=(float)b.Right;bounds[at+3]=(float)b.Bottom;
                 }
-                if(WeatherWindows(state,bounds,windows.Count)<0)return false;
+                int result=WeatherWindows(state,bounds,windows.Count);
+                if(result<0)return result;
                 uploadedRevision=view.Revision;
             }
             canvas.Reset();view.Draw(canvas);
-            return WeatherFrame(state,canvas.Marks,canvas.Count,(float)view.ActualWidth,(float)view.ActualHeight,(float)Scale)>=0;
+            return WeatherFrame(state,canvas.Marks,canvas.Count,(float)view.ActualWidth,(float)view.ActualHeight,(float)Scale);
         }
         public void Dispose(){if(state!=IntPtr.Zero){WeatherDestroy(state);state=IntPtr.Zero;}}
     }

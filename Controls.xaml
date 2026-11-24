@@ -36,6 +36,13 @@
   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="20,9,20,16">
    <Grid>
     <StackPanel x:Name="ScenePage">
+     <CheckBox x:Name="LockIn" Content="Lock In" FontWeight="SemiBold" FontSize="16"
+               ToolTip="Pause the weather and show a steady red light along the top edge."/>
+     <StackPanel x:Name="LampControls" Visibility="Collapsed" Margin="0,8,0,0">
+      <Grid><TextBlock Text="Glow brightness"/><TextBlock x:Name="GlowValue" Style="{StaticResource Value}"/></Grid>
+      <Slider x:Name="Glow" Minimum="1" Maximum="100" Margin="0,4,0,0"/>
+     </StackPanel>
+     <StackPanel x:Name="WeatherControls" Margin="0,8,0,0">
      <TextBlock Text="Weather" Style="{StaticResource Heading}"/>
      <UniformGrid x:Name="Choices" Columns="3" Margin="-3,0,-3,13"/>
      <Grid><TextBlock Text="Intensity"/><TextBlock x:Name="LevelValue" Style="{StaticResource Value}"/></Grid>
@@ -45,6 +52,7 @@
      <Grid><TextBlock Text="Weather behind windows"/><TextBlock x:Name="DepthValue" Style="{StaticResource Value}"/></Grid>
      <Slider x:Name="Distance" Minimum="0" Maximum="100" Margin="0,4,0,8"/>
      <CheckBox x:Name="Grass" Content="Grow grass on window edges"/><CheckBox x:Name="Sound" Content="Play rain sounds during rain or sleet"/>
+     </StackPanel>
     </StackPanel>
     <StackPanel x:Name="OptionsPage" Visibility="Collapsed">
      <TextBlock Text="Desktop" Style="{StaticResource Heading}"/>

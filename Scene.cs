@@ -44,6 +44,8 @@ namespace WindowWeather {
         private readonly Puff[] puffs=new Puff[32];
         private int nextPuff;
         internal readonly Snowpack Snow;
+        private static readonly Brush lampHalo=Glow(Color.FromArgb(162,227,50,48));
+        private static readonly Brush lampRim=Glow(Color.FromArgb(185,245,72,59));
         private static readonly Brush insectGlow=Glow(Color.FromArgb(88,218,238,107));
         private static readonly Brush insectCore=Ink(236,248,252,159);
         private Weather last;
@@ -276,6 +278,16 @@ namespace WindowWeather {
             if(!Direct) Draw(new WpfCanvas(dc,this));
         }
         internal void Draw(WeatherCanvas dc) {
+            if(prefs.LockIn){
+                double width=ActualWidth;
+                if(width<=0)return;
+                dc.PushOpacity(prefs.GlowBrightness/100.0);
+                var center=new Point(width*.5,-.4);
+                dc.DrawEllipse(lampHalo,center,width*1.04,24);
+                dc.DrawEllipse(lampRim,center,width*.83,5);
+                dc.Pop();
+                return;
+            }
             if(prefs.Mode==Weather.Sunlight || prefs.Mode==Weather.Fog || prefs.Mode==Weather.Fireflies) DrawAtmosphere(dc);
             int nearLayers=Math.Min(3,windows.Count);
             foreach(var p in falling){

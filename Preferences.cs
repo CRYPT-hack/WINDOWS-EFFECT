@@ -29,6 +29,11 @@ namespace WindowWeather {
         [DataMember] public int Wind = 16;
         [DataMember] public int Depth = 45;
         [DataMember] public bool Sound, Grass, OverFullscreen, Saver, Paused, Sync;
+        [DataMember] public bool LockIn;
+        internal const int DefaultGlow = 40;
+        [DataMember] public int GlowBrightness = DefaultGlow;
+        [OnDeserializing]
+        private void InitializeGlow(StreamingContext context) { GlowBrightness=DefaultGlow; }
         [DataMember] public bool Visitors;
         [DataMember] public int BirdsFound;
         [DataMember] public Dictionary<string,SavedScene> Scenes=new Dictionary<string,SavedScene>();
@@ -42,6 +47,7 @@ namespace WindowWeather {
                 using(var f=File.OpenRead(FileName)) {
                     var p=(Preferences)new DataContractJsonSerializer(typeof(Preferences)).ReadObject(f);
                     if(!Enum.IsDefined(typeof(Weather),p.Mode)) p.Mode=Weather.Rain;
+                    p.GlowBrightness=Math.Max(1,Math.Min(100,p.GlowBrightness));
                     p.Intensity=Math.Min(100,Math.Max(1,p.Intensity));
                     p.Depth=Math.Min(100,Math.Max(0,p.Depth)); p.Wind=Math.Min(100,Math.Max(-100,p.Wind));
                     if(p.Scenes==null) p.Scenes=new Dictionary<string,SavedScene>();
